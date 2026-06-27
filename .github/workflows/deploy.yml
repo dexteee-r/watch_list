@@ -1,0 +1,46 @@
+name: Deploy
+
+# Déploiement automatique sur le homelab APRÈS un CI réussi sur `main`.
+# S'exécute sur un runner self-hosted installé dans le LXC (connexion sortante
+# vers GitHub, aucun port entrant à exposer).
+#
+# Pré-requis côté serveur (à faire une fois lors du 11.8) :
+#   1. Installer un runner GitHub Actions self-hosted avec le label `watchlist`.
+#   2. Cloner le repo dans un dossier persistant, par défaut /opt/watchlist
+#      (surcharger via la variable de repo DEPLOY_DIR si besoin).
+#   3. Y placer le `.env` de prod (chmod 600) — il survit aux `git reset` car non suivi.
+#   4. L'utilisateur du runner doit pouvoir lancer `docker`/`docker compose`.
+
+on:
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
+    branches: [main]
+
+# Un seul déploiement à la fois.
+concurrency:
+  group: deploy-prod
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Build & up (homelab)
+    # Ne déploie que si le CI a réussi.
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    runs-on: [self-hosted, watchlist]
+    steps:
+      - name: Pull + build + up
+        env:
+          DEPLOY_DIR: ${{ vars.DEPLOY_DIR }}
+        run: |
+          set -euo pipefail
+          cd "${DEPLOY_DIR:-/opt/watchlist}"
+          git fetch --all --prune
+          git reset --hard origin/main
+          # Fichier de base UNIQUEMENT : l'override de dev ne doit jamais s'appliquer en prod.
+          docker compose -f docker-compose.yml up -d --build
+          docker image prune -f
+      - name: État des conteneurs
+        run: |
+          cd "${DEPLOY_DIR:-/opt/watchlist}"
+          docker compose -f docker-compose.yml ps

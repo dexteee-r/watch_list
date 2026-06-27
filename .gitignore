@@ -12,6 +12,10 @@ __pycache__/
 .env.local
 backend/.env
 
+# Surcharge Docker de dev local (publie 5432 + cookie non-Secure) — NE doit JAMAIS
+# atteindre la prod, donc hors repo. Recréer en local si besoin (cf README).
+docker-compose.override.yml
+
 # Database
 tracker.db
 tracker.db-journal
