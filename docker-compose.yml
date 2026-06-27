@@ -1,0 +1,58 @@
+# Stack de PRODUCTION — 3 conteneurs derrière le reverse proxy (NPM).
+#   web  : nginx sert le SPA buildé + proxy_pass /api → api   (SEUL port publié : 80)
+#   api  : FastAPI/uvicorn, applique les migrations Alembic au démarrage
+#   db   : PostgreSQL 17, JAMAIS exposé (réseau interne du compose uniquement)
+#
+# Secrets via `.env` (hors-repo, chmod 600). Voir `.env.example`.
+# Déploiement homelab : copier ce fichier + .env, puis `docker compose up -d`.
+#   (NE PAS copier docker-compose.override.yml, qui est réservé au dev local.)
+
+services:
+  db:
+    image: postgres:17-alpine
+    container_name: watchlist-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-watchlist}
+      POSTGRES_USER: ${POSTGRES_USER:-watchlist}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD requis (cf .env.example)}
+    volumes:
+      - watchlist_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-watchlist} -d ${POSTGRES_DB:-watchlist}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - internal
+
+  api:
+    build: ./backend
+    container_name: watchlist-api
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-watchlist}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-watchlist}
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET requis (cf .env.example)}
+      COOKIE_SECURE: ${COOKIE_SECURE:-true}
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - internal
+
+  web:
+    build: .
+    container_name: watchlist-web
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    depends_on:
+      - api
+    networks:
+      - internal
+
+networks:
+  internal:
+
+volumes:
+  watchlist_pgdata:

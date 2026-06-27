@@ -1,0 +1,33 @@
+# Dependencies
+node_modules/
+
+# Python (backend)
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Environment
+.env
+.env.local
+backend/.env
+
+# Database
+tracker.db
+tracker.db-journal
+*.sqlite
+*.sqlite3
+
+# Build output
+dist/
+build/
+
+# Logs
+*.log
+npm-debug.log*
+
+# Editor
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

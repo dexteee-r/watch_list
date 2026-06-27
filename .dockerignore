@@ -1,0 +1,12 @@
+# Contexte de build du conteneur `web` (racine) — on n'envoie que le nécessaire
+# au build Vite. Le backend a son propre contexte (./backend).
+node_modules
+dist
+.git
+.env
+.env.*
+backend
+admin-panel
+tasks
+.claude
+*.md
