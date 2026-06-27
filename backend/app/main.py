@@ -9,7 +9,7 @@ from fastapi import FastAPI
 from .routers import admin, auth, health, shows
 
 app = FastAPI(
-    title="Watchlist API",
+    title="Watch List API",
     version="0.1.0",
     docs_url="/api/docs",
     redoc_url=None,

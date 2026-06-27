@@ -95,7 +95,7 @@ export default function App() {
                       weight="duotone"
                       className="text-amber-400 transition-transform group-hover:-rotate-6"
                     />
-                    <span className="text-lg font-semibold tracking-tight">Series Tracker</span>
+                    <span className="text-lg font-semibold tracking-tight">Watch List</span>
                   </Link>
 
                   <nav className="flex items-center gap-1">

@@ -1,4 +1,4 @@
-# 📺 Series Tracker
+# 📺 Watch List
 
 Application web **auto-hébergée** pour suivre l'avancement de tes séries TV : tu
 coches les épisodes au fil de tes visionnages. Multi-utilisateur (chacun sa liste

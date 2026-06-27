@@ -37,7 +37,7 @@ export default function LoginPage() {
       >
         <div className="mb-8 flex flex-col items-center text-center">
           <FilmSlate size={36} weight="duotone" className="text-amber-400" />
-          <h1 className="mt-3 text-xl font-semibold tracking-tight">Series Tracker</h1>
+          <h1 className="mt-3 text-xl font-semibold tracking-tight">Watch List</h1>
           <p className="mt-1 text-sm text-zinc-500">Connecte-toi pour accéder à ta liste.</p>
         </div>
 
