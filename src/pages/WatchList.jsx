@@ -1,10 +1,10 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { FilmReel } from '@phosphor-icons/react'
 import ShowCard from '../components/ShowCard.jsx'
 import { ShowCardSkeleton } from '../components/Skeleton.jsx'
-import { getShowsWithProgress, removeShow, STATUSES } from '../api/store.js'
+import { getShowsWithProgress, removeShow, watchNext, STATUSES } from '../api/store.js'
 import { STATUS_LABELS } from '../labels.js'
 import { staggerContainer } from '../motion.js'
 
@@ -36,6 +36,33 @@ export default function WatchList() {
   async function handleRemove(id) {
     await removeShow(id)
     await reload()
+  }
+
+  // Évite les requêtes « +1 » concurrentes sur la même série (clics rapides) qui
+  // liraient le même « prochain non vu » → on attend la fin de la précédente.
+  const pendingNext = useRef(new Set())
+
+  async function handleWatchNext(id) {
+    if (pendingNext.current.has(id)) return
+    pendingNext.current.add(id)
+    let res
+    try {
+      res = await watchNext(id)
+    } finally {
+      pendingNext.current.delete(id)
+    }
+    setShows((prev) =>
+      prev.map((s) =>
+        s.tvmaze_id === id
+          ? {
+              ...s,
+              watched: res.watched,
+              // Si on vient de cocher le dernier épisode, la série est auto-terminée.
+              status: res.watched >= res.total ? 'completed' : s.status,
+            }
+          : s,
+      ),
+    )
   }
 
   const filtered = useMemo(
@@ -98,7 +125,12 @@ export default function WatchList() {
           className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4"
         >
           {filtered.map((show) => (
-            <ShowCard key={show.tvmaze_id} show={show} onRemove={handleRemove} />
+            <ShowCard
+              key={show.tvmaze_id}
+              show={show}
+              onRemove={handleRemove}
+              onWatchNext={handleWatchNext}
+            />
           ))}
         </motion.div>
       )}

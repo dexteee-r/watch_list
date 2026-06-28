@@ -5,12 +5,22 @@ import ProgressBar from './ProgressBar.jsx'
 import { STATUS_LABELS, STATUS_BADGE_STYLES } from '../labels.js'
 import { riseItem, SPRING } from '../motion.js'
 
-export default function ShowCard({ show, onRemove }) {
+export default function ShowCard({ show, onRemove, onWatchNext }) {
   function handleRemove(e) {
     e.preventDefault()
     if (window.confirm(`Retirer « ${show.name} » de ta liste ?`)) {
       onRemove(show.tvmaze_id)
     }
+  }
+
+  const canWatchNext =
+    onWatchNext &&
+    show.status !== 'completed' &&
+    (show.watched ?? 0) < (show.total_episodes ?? 0)
+
+  function handleWatchNext(e) {
+    e.preventDefault()
+    onWatchNext(show.tvmaze_id)
   }
 
   return (
@@ -56,7 +66,22 @@ export default function ShowCard({ show, onRemove }) {
           >
             {STATUS_LABELS[show.status] ?? show.status}
           </span>
-          <ProgressBar value={show.watched} max={show.total_episodes} />
+          <div className="flex items-center gap-2">
+            <div className="flex-1">
+              <ProgressBar value={show.watched} max={show.total_episodes} />
+            </div>
+            {canWatchNext && (
+              <button
+                type="button"
+                onClick={handleWatchNext}
+                aria-label={`Marquer l'épisode suivant de ${show.name} comme vu`}
+                title="Marquer l'épisode suivant comme vu"
+                className="flex-shrink-0 rounded-md bg-amber-400/90 px-2 py-0.5 text-xs font-bold text-zinc-950 transition hover:bg-amber-300 active:scale-95"
+              >
+                +1
+              </button>
+            )}
+          </div>
         </div>
       </Link>
     </motion.div>

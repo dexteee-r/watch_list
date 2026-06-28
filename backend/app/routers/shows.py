@@ -18,6 +18,7 @@ from ..schemas import (
     AddShowRequest,
     MarkRequest,
     ProgressItem,
+    QuickWatchOut,
     RatingItem,
     RatingUpdate,
     ShowOut,
@@ -208,6 +209,30 @@ async def mark_watched(
     if user_show is not None:
         await _apply_progress_side_effects(db, user.id, show.id, user_show)
     await db.commit()
+
+
+@router.post("/{tvmaze_id}/progress/next", response_model=QuickWatchOut)
+async def watch_next(
+    tvmaze_id: int, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)
+) -> QuickWatchOut:
+    """« +1 » : marque le prochain épisode non vu (sans ouvrir la fiche)."""
+    show = await catalog.get_show_by_tvmaze(db, tvmaze_id)
+    user_show = await tracking.get_user_show(db, user.id, show.id) if show else None
+    if user_show is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Série non suivie.")
+    episode = await tracking.find_next_unwatched(db, user.id, show.id)
+    if episode is not None:
+        await tracking.mark_watched(db, user.id, episode.id)
+        await _apply_progress_side_effects(db, user.id, show.id, user_show)
+        await db.commit()
+    watched = await tracking.count_watched(db, user.id, show.id)
+    total = await tracking.count_episodes(db, show.id)
+    return QuickWatchOut(
+        watched=watched,
+        total=total,
+        season=episode.season if episode else None,
+        episode=episode.number if episode else None,
+    )
 
 
 @router.delete(

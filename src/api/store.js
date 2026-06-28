@@ -73,6 +73,11 @@ export function unmarkWatched(tvmazeId, season, episode) {
   return request(`/shows/${tvmazeId}/progress/${season}/${episode}`, { method: 'DELETE' })
 }
 
+// « +1 » : marque le prochain épisode non vu. Renvoie { watched, total, season, episode }.
+export function watchNext(tvmazeId) {
+  return request(`/shows/${tvmazeId}/progress/next`, { method: 'POST' })
+}
+
 // --- Notes par saison ---
 export function getRatings(tvmazeId) {
   return request(`/shows/${tvmazeId}/ratings`)

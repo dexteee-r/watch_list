@@ -113,6 +113,18 @@ async def find_episode(
     return (await db.execute(stmt)).scalar_one_or_none()
 
 
+async def find_next_unwatched(db: AsyncSession, user_id: int, show_id: int) -> Episode | None:
+    """Prochain épisode non vu (le plus petit season/number), ou None si tout est vu."""
+    watched_ids = select(EpisodeWatch.episode_id).where(EpisodeWatch.user_id == user_id)
+    stmt = (
+        select(Episode)
+        .where(Episode.show_id == show_id, Episode.id.notin_(watched_ids))
+        .order_by(Episode.season, Episode.number)
+        .limit(1)
+    )
+    return (await db.execute(stmt)).scalar_one_or_none()
+
+
 async def mark_watched(db: AsyncSession, user_id: int, episode_id: int) -> None:
     stmt = (
         insert(EpisodeWatch)

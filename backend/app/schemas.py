@@ -145,6 +145,15 @@ class MarkRequest(BaseModel):
     episode: int
 
 
+class QuickWatchOut(BaseModel):
+    """Résultat d'un « +1 épisode » : épisode marqué (ou null si déjà tout vu) + progression."""
+
+    watched: int
+    total: int
+    season: int | None = None
+    episode: int | None = None
+
+
 class RatingItem(BaseModel):
     season: int
     rating: int
