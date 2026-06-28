@@ -6,7 +6,13 @@ from ..db import get_db
 from ..deps import require_admin
 from ..models import User
 from ..repository import users as users_repo
-from ..schemas import PasswordResetOut, UserCreate, UserCreatedOut, UserOut
+from ..schemas import (
+    PasswordResetOut,
+    PasswordResetRequest,
+    UserCreate,
+    UserCreatedOut,
+    UserOut,
+)
 from ..security import generate_password, hash_password
 
 router = APIRouter(prefix="/admin", tags=["admin"], dependencies=[Depends(require_admin)])
@@ -23,7 +29,8 @@ async def create_user(payload: UserCreate, db: AsyncSession = Depends(get_db)) -
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT, detail="Un compte avec cet email existe déjà."
         )
-    password = generate_password()
+    # Mot de passe choisi par l'admin si fourni, sinon généré.
+    password = payload.password or generate_password()
     user = await users_repo.create(
         db, payload.email, hash_password(password), payload.is_admin, payload.display_name
     )
@@ -33,11 +40,16 @@ async def create_user(payload: UserCreate, db: AsyncSession = Depends(get_db)) -
 
 
 @router.post("/users/{user_id}/reset-password", response_model=PasswordResetOut)
-async def reset_password(user_id: int, db: AsyncSession = Depends(get_db)) -> PasswordResetOut:
+async def reset_password(
+    user_id: int,
+    payload: PasswordResetRequest = PasswordResetRequest(),
+    db: AsyncSession = Depends(get_db),
+) -> PasswordResetOut:
     user = await users_repo.get_by_id(db, user_id)
     if user is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Compte introuvable.")
-    password = generate_password()
+    # Mot de passe choisi par l'admin si fourni, sinon généré.
+    password = payload.password or generate_password()
     await users_repo.set_password(db, user, hash_password(password))
     await db.commit()
     return PasswordResetOut(user_id=user.id, generated_password=password)

@@ -16,6 +16,18 @@ def _validate_status(value: str) -> str:
     return value
 
 
+MIN_PASSWORD_LENGTH = 8
+
+
+def _validate_optional_password(value: str | None) -> str | None:
+    """Mot de passe choisi par l'admin. Vide/None → None (= généré côté serveur)."""
+    if value is None or value == "":
+        return None
+    if len(value) < MIN_PASSWORD_LENGTH:
+        raise ValueError(f"Le mot de passe doit faire au moins {MIN_PASSWORD_LENGTH} caractères.")
+    return value
+
+
 class LoginRequest(BaseModel):
     email: EmailStr
     password: str
@@ -45,11 +57,26 @@ class UserCreate(BaseModel):
     email: EmailStr
     is_admin: bool = False
     display_name: str | None = None
+    password: str | None = None  # None/"" → mot de passe généré côté serveur
 
     @field_validator("email")
     @classmethod
     def _lower(cls, v: str) -> str:
         return _normalize_email(v)
+
+    @field_validator("password")
+    @classmethod
+    def _pwd(cls, v: str | None) -> str | None:
+        return _validate_optional_password(v)
+
+
+class PasswordResetRequest(BaseModel):
+    password: str | None = None  # None/"" → mot de passe généré côté serveur
+
+    @field_validator("password")
+    @classmethod
+    def _pwd(cls, v: str | None) -> str | None:
+        return _validate_optional_password(v)
 
 
 class UserCreatedOut(BaseModel):
