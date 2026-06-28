@@ -3,7 +3,7 @@
 Toutes les fonctions sont scopées par `user_id` : c'est ici que se fait l'isolation
 des données entre utilisateurs (l'équivalent de la RLS Supabase, au niveau applicatif).
 """
-from sqlalchemy import delete, func, select
+from sqlalchemy import delete, func, literal, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -112,3 +112,22 @@ async def unmark_watched(db: AsyncSession, user_id: int, episode_id: int) -> Non
             EpisodeWatch.user_id == user_id, EpisodeWatch.episode_id == episode_id
         )
     )
+
+
+async def count_episodes(db: AsyncSession, show_id: int) -> int:
+    """Nombre total d'épisodes au catalogue pour une série."""
+    stmt = select(func.count()).select_from(Episode).where(Episode.show_id == show_id)
+    return (await db.execute(stmt)).scalar_one()
+
+
+async def mark_all_watched(db: AsyncSession, user_id: int, show_id: int) -> None:
+    """Marque vus TOUS les épisodes de la série pour l'utilisateur (idempotent)."""
+    stmt = (
+        insert(EpisodeWatch)
+        .from_select(
+            ["user_id", "episode_id"],
+            select(literal(user_id), Episode.id).where(Episode.show_id == show_id),
+        )
+        .on_conflict_do_nothing(index_elements=["user_id", "episode_id"])
+    )
+    await db.execute(stmt)

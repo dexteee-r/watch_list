@@ -72,17 +72,24 @@ export default function ShowDetail() {
     const key = `${season}-${number}`
     if (watched) await unmarkWatched(id, season, number)
     else await markWatched(id, season, number)
-    setWatchedSet((prev) => {
-      const next = new Set(prev)
-      if (watched) next.delete(key)
-      else next.add(key)
-      return next
-    })
+    const next = new Set(watchedSet)
+    if (watched) next.delete(key)
+    else next.add(key)
+    setWatchedSet(next)
+    // Lien épisodes → statut : cocher le dernier épisode passe la série en « Terminé »
+    // (le backend le fait aussi ; on le reflète à l'écran sans recharger).
+    if (!watched && next.size === episodes.length && localShow?.status !== 'completed') {
+      setLocalShow((prev) => ({ ...prev, status: 'completed' }))
+    }
   }
 
   async function handleStatusChange(status) {
     await setStatus(id, status)
     setLocalShow((prev) => ({ ...prev, status }))
+    // Lien statut → épisodes : « Terminé » coche tous les épisodes (reflet du backend).
+    if (status === 'completed') {
+      setWatchedSet(new Set(episodes.map((e) => `${e.season}-${e.number}`)))
+    }
   }
 
   async function handleRate(season, rating) {

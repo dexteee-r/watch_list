@@ -113,6 +113,17 @@ async def remove_show(
     await db.commit()
 
 
+async def _autocomplete_if_all_watched(db: AsyncSession, user_id: int, show_id: int) -> None:
+    """Lien épisodes → statut : si tous les épisodes sont vus, passe la série en 'completed'."""
+    total = await tracking.count_episodes(db, show_id)
+    if total == 0:
+        return
+    if await tracking.count_watched(db, user_id, show_id) >= total:
+        user_show = await tracking.get_user_show(db, user_id, show_id)
+        if user_show is not None and user_show.status != "completed":
+            user_show.status = "completed"
+
+
 @router.patch("/{tvmaze_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def update_status(
     tvmaze_id: int,
@@ -125,6 +136,9 @@ async def update_status(
     if user_show is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Série non suivie.")
     user_show.status = payload.status
+    # Lien statut → épisodes : passer en 'completed' coche tous les épisodes.
+    if payload.status == "completed":
+        await tracking.mark_all_watched(db, user.id, show.id)
     await db.commit()
 
 
@@ -152,6 +166,8 @@ async def mark_watched(
     if episode is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Épisode inconnu pour cette série.")
     await tracking.mark_watched(db, user.id, episode.id)
+    # Lien épisodes → statut : cocher le dernier épisode manquant passe en 'completed'.
+    await _autocomplete_if_all_watched(db, user.id, show.id)
     await db.commit()
 
 
