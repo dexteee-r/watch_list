@@ -57,6 +57,9 @@ class User(Base):
     watches: Mapped[list["EpisodeWatch"]] = relationship(
         back_populates="user", cascade="all, delete-orphan"
     )
+    ratings: Mapped[list["SeasonRating"]] = relationship(
+        back_populates="user", cascade="all, delete-orphan"
+    )
 
 
 class Show(Base):
@@ -157,3 +160,29 @@ class EpisodeWatch(Base):
     episode: Mapped["Episode"] = relationship(back_populates="watches")
 
     __table_args__ = (UniqueConstraint("user_id", "episode_id"),)
+
+
+class SeasonRating(Base):
+    """Note (1-10) donnée par un utilisateur à une saison d'une série (PRIVÉ)."""
+
+    __tablename__ = "season_ratings"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    user_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    show_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("shows.id", ondelete="CASCADE"), nullable=False
+    )
+    season: Mapped[int] = mapped_column(SmallInteger, nullable=False)
+    rating: Mapped[int] = mapped_column(SmallInteger, nullable=False)
+    created_at: Mapped[datetime] = _created_at()
+    updated_at: Mapped[datetime] = _updated_at()
+
+    user: Mapped["User"] = relationship(back_populates="ratings")
+
+    __table_args__ = (
+        UniqueConstraint("user_id", "show_id", "season"),
+        CheckConstraint("rating BETWEEN 1 AND 10", name="rating_range"),
+        Index("ix_season_ratings_user_show", "user_id", "show_id"),
+    )

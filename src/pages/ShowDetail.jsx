@@ -12,6 +12,9 @@ import {
   setStatus,
   markWatched,
   unmarkWatched,
+  getRatings,
+  setRating,
+  deleteRating,
   STATUSES,
 } from '../api/store.js'
 import { STATUS_LABELS } from '../labels.js'
@@ -28,6 +31,7 @@ export default function ShowDetail() {
   const [episodes, setEpisodes] = useState([])
   const [localShow, setLocalShow] = useState(null)
   const [watchedSet, setWatchedSet] = useState(() => new Set())
+  const [ratings, setRatings] = useState({})
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
 
@@ -35,17 +39,19 @@ export default function ShowDetail() {
     let active = true
     ;(async () => {
       try {
-        const [det, eps, local, prog] = await Promise.all([
+        const [det, eps, local, prog, rats] = await Promise.all([
           getShowDetails(id),
           getEpisodes(id),
           getShow(id),
           getProgress(id),
+          getRatings(id),
         ])
         if (!active) return
         setDetails(det)
         setEpisodes(eps)
         setLocalShow(local ?? null)
         setWatchedSet(new Set(prog.map((p) => `${p.season}-${p.episode}`)))
+        setRatings(Object.fromEntries(rats.map((r) => [r.season, r.rating])))
         setLoading(false)
       } catch {
         if (active) {
@@ -77,6 +83,20 @@ export default function ShowDetail() {
   async function handleStatusChange(status) {
     await setStatus(id, status)
     setLocalShow((prev) => ({ ...prev, status }))
+  }
+
+  async function handleRate(season, rating) {
+    if (rating == null) {
+      await deleteRating(id, season)
+      setRatings((prev) => {
+        const next = { ...prev }
+        delete next[season]
+        return next
+      })
+    } else {
+      await setRating(id, season, rating)
+      setRatings((prev) => ({ ...prev, [season]: rating }))
+    }
   }
 
   async function handleAdd() {
@@ -181,6 +201,8 @@ export default function ShowDetail() {
         watchedSet={watchedSet}
         onToggle={handleToggle}
         disabled={!tracked}
+        ratings={ratings}
+        onRate={handleRate}
       />
     </article>
   )

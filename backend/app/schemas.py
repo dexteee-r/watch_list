@@ -134,3 +134,19 @@ class ProgressItem(BaseModel):
 class MarkRequest(BaseModel):
     season: int
     episode: int
+
+
+class RatingItem(BaseModel):
+    season: int
+    rating: int
+
+
+class RatingUpdate(BaseModel):
+    rating: int
+
+    @field_validator("rating")
+    @classmethod
+    def _rating(cls, v: int) -> int:
+        if not 1 <= v <= 10:
+            raise ValueError("La note doit être comprise entre 1 et 10.")
+        return v

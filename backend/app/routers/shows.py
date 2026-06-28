@@ -11,8 +11,16 @@ from ..db import get_db
 from ..deps import get_current_user
 from ..models import Show, User
 from ..ratelimit import add_show_rate_limit
-from ..repository import catalog, tracking
-from ..schemas import AddShowRequest, MarkRequest, ProgressItem, ShowOut, StatusUpdate
+from ..repository import catalog, ratings as ratings_repo, tracking
+from ..schemas import (
+    AddShowRequest,
+    MarkRequest,
+    ProgressItem,
+    RatingItem,
+    RatingUpdate,
+    ShowOut,
+    StatusUpdate,
+)
 from ..services import tvmaze
 
 router = APIRouter(prefix="/shows", tags=["shows"])
@@ -164,4 +172,49 @@ async def unmark_watched(
     if episode_row is None:
         return
     await tracking.unmark_watched(db, user.id, episode_row.id)
+    await db.commit()
+
+
+# --- Notes par saison ------------------------------------------------------
+
+
+@router.get("/{tvmaze_id}/ratings", response_model=list[RatingItem])
+async def list_ratings(
+    tvmaze_id: int, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)
+) -> list[dict]:
+    show = await catalog.get_show_by_tvmaze(db, tvmaze_id)
+    if show is None:
+        return []
+    return await ratings_repo.get_ratings(db, user.id, show.id)
+
+
+@router.put("/{tvmaze_id}/ratings/{season}", response_model=RatingItem)
+async def set_rating(
+    tvmaze_id: int,
+    season: int,
+    payload: RatingUpdate,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> RatingItem:
+    if season < 1:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Saison invalide.")
+    show = await catalog.get_show_by_tvmaze(db, tvmaze_id)
+    if show is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Série introuvable.")
+    await ratings_repo.set_rating(db, user.id, show.id, season, payload.rating)
+    await db.commit()
+    return RatingItem(season=season, rating=payload.rating)
+
+
+@router.delete("/{tvmaze_id}/ratings/{season}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_rating(
+    tvmaze_id: int,
+    season: int,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> None:
+    show = await catalog.get_show_by_tvmaze(db, tvmaze_id)
+    if show is None:
+        return
+    await ratings_repo.delete_rating(db, user.id, show.id, season)
     await db.commit()

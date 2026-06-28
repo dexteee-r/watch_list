@@ -68,6 +68,22 @@ export function unmarkWatched(tvmazeId, season, episode) {
   return request(`/shows/${tvmazeId}/progress/${season}/${episode}`, { method: 'DELETE' })
 }
 
+// --- Notes par saison ---
+export function getRatings(tvmazeId) {
+  return request(`/shows/${tvmazeId}/ratings`)
+}
+
+export function setRating(tvmazeId, season, rating) {
+  return request(`/shows/${tvmazeId}/ratings/${season}`, {
+    method: 'PUT',
+    body: JSON.stringify({ rating }),
+  })
+}
+
+export function deleteRating(tvmazeId, season) {
+  return request(`/shows/${tvmazeId}/ratings/${season}`, { method: 'DELETE' })
+}
+
 // Confort de dev : accès aux fonctions depuis la console.
 if (import.meta.env.DEV) {
   window.tracker = {
@@ -80,5 +96,8 @@ if (import.meta.env.DEV) {
     getProgress,
     markWatched,
     unmarkWatched,
+    getRatings,
+    setRating,
+    deleteRating,
   }
 }
