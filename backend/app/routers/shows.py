@@ -3,6 +3,8 @@
 Le client (front) manipule les séries par leur `tvmaze_id` ; l'API mappe en interne
 vers l'id du catalogue. Tout est scopé à l'utilisateur courant (isolation des données).
 """
+from datetime import datetime, timezone
+
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -19,14 +21,16 @@ from ..schemas import (
     RatingItem,
     RatingUpdate,
     ShowOut,
-    StatusUpdate,
+    ShowUpdate,
 )
 from ..services import tvmaze
 
 router = APIRouter(prefix="/shows", tags=["shows"])
 
 
-def _show_out(show: Show, status_: str, added_at, watched: int = 0) -> ShowOut:
+def _show_out(
+    show: Show, status_: str, added_at, watched: int = 0, started_at=None, finished_at=None
+) -> ShowOut:
     return ShowOut(
         tvmaze_id=show.tvmaze_id,
         name=show.name,
@@ -35,6 +39,8 @@ def _show_out(show: Show, status_: str, added_at, watched: int = 0) -> ShowOut:
         total_episodes=show.total_episodes,
         status=status_,
         added_at=added_at,
+        started_at=started_at,
+        finished_at=finished_at,
         watched=watched,
     )
 
@@ -66,7 +72,10 @@ async def list_shows(
     user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)
 ) -> list[ShowOut]:
     rows = await tracking.list_with_watched(db, user.id)
-    return [_show_out(show, st, at, watched) for show, st, at, watched in rows]
+    return [
+        _show_out(show, st, at, watched, started, finished)
+        for show, st, at, started, finished, watched in rows
+    ]
 
 
 @router.get("/{tvmaze_id}", response_model=ShowOut)
@@ -76,9 +85,9 @@ async def get_show(
     row = await tracking.get_by_tvmaze(db, user.id, tvmaze_id)
     if row is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Série non suivie.")
-    show, st, at = row
+    show, st, at, started, finished = row
     watched = await tracking.count_watched(db, user.id, show.id)
-    return _show_out(show, st, at, watched)
+    return _show_out(show, st, at, watched, started, finished)
 
 
 @router.post(
@@ -96,10 +105,16 @@ async def add_show(
     existing = await tracking.get_user_show(db, user.id, show.id)
     if existing is not None:  # idempotent : déjà suivie
         watched = await tracking.count_watched(db, user.id, show.id)
-        return _show_out(show, existing.status, existing.added_at, watched)
+        return _show_out(
+            show, existing.status, existing.added_at, watched,
+            existing.started_at, existing.finished_at,
+        )
     user_show = await tracking.create_user_show(db, user.id, show.id, payload.status)
     await db.commit()
-    return _show_out(show, user_show.status, user_show.added_at, 0)
+    return _show_out(
+        show, user_show.status, user_show.added_at, 0,
+        user_show.started_at, user_show.finished_at,
+    )
 
 
 @router.delete("/{tvmaze_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -113,21 +128,24 @@ async def remove_show(
     await db.commit()
 
 
-async def _autocomplete_if_all_watched(db: AsyncSession, user_id: int, show_id: int) -> None:
-    """Lien épisodes → statut : si tous les épisodes sont vus, passe la série en 'completed'."""
+async def _apply_progress_side_effects(db: AsyncSession, user_id: int, show_id: int, user_show) -> None:
+    """Après (dé)cochage : renseigne `started_at` au 1er épisode vu, et passe en
+    'completed' (+ `finished_at`) quand tous les épisodes sont vus."""
+    now = datetime.now(timezone.utc)
+    watched = await tracking.count_watched(db, user_id, show_id)
+    if watched > 0 and user_show.started_at is None:
+        user_show.started_at = now
     total = await tracking.count_episodes(db, show_id)
-    if total == 0:
-        return
-    if await tracking.count_watched(db, user_id, show_id) >= total:
-        user_show = await tracking.get_user_show(db, user_id, show_id)
-        if user_show is not None and user_show.status != "completed":
-            user_show.status = "completed"
+    if total and watched >= total and user_show.status != "completed":
+        user_show.status = "completed"
+        if user_show.finished_at is None:
+            user_show.finished_at = now
 
 
 @router.patch("/{tvmaze_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def update_status(
+async def update_show(
     tvmaze_id: int,
-    payload: StatusUpdate,
+    payload: ShowUpdate,
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> None:
@@ -135,10 +153,29 @@ async def update_status(
     user_show = await tracking.get_user_show(db, user.id, show.id) if show else None
     if user_show is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Série non suivie.")
-    user_show.status = payload.status
-    # Lien statut → épisodes : passer en 'completed' coche tous les épisodes.
-    if payload.status == "completed":
-        await tracking.mark_all_watched(db, user.id, show.id)
+
+    fields = payload.model_fields_set
+    now = datetime.now(timezone.utc)
+
+    if "status" in fields and payload.status is not None:
+        user_show.status = payload.status
+        if payload.status == "completed":
+            # Lien statut → épisodes : coche tout + renseigne les dates si absentes.
+            await tracking.mark_all_watched(db, user.id, show.id)
+            if user_show.started_at is None:
+                user_show.started_at = now
+            if user_show.finished_at is None:
+                user_show.finished_at = now
+        else:
+            # Quitter 'completed' efface la date de fin (devenue caduque).
+            user_show.finished_at = None
+
+    # Édition manuelle des dates (prioritaire sur l'auto si fournie dans la même requête).
+    if "started_at" in fields:
+        user_show.started_at = payload.started_at
+    if "finished_at" in fields:
+        user_show.finished_at = payload.finished_at
+
     await db.commit()
 
 
@@ -166,8 +203,10 @@ async def mark_watched(
     if episode is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Épisode inconnu pour cette série.")
     await tracking.mark_watched(db, user.id, episode.id)
-    # Lien épisodes → statut : cocher le dernier épisode manquant passe en 'completed'.
-    await _autocomplete_if_all_watched(db, user.id, show.id)
+    # Renseigne started_at au 1er épisode + passe en 'completed' si tous vus.
+    user_show = await tracking.get_user_show(db, user.id, show.id)
+    if user_show is not None:
+        await _apply_progress_side_effects(db, user.id, show.id, user_show)
     await db.commit()
 
 

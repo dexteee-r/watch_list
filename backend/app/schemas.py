@@ -104,6 +104,8 @@ class ShowOut(BaseModel):
     total_episodes: int | None = None
     status: str
     added_at: datetime
+    started_at: datetime | None = None
+    finished_at: datetime | None = None
     watched: int = 0
 
 
@@ -117,13 +119,20 @@ class AddShowRequest(BaseModel):
         return _validate_status(v)
 
 
-class StatusUpdate(BaseModel):
-    status: str
+class ShowUpdate(BaseModel):
+    """Mise à jour partielle d'une série suivie : statut et/ou dates de visionnage.
+
+    Les champs absents ne sont pas touchés ; un champ date envoyé à `null` l'efface.
+    """
+
+    status: str | None = None
+    started_at: datetime | None = None
+    finished_at: datetime | None = None
 
     @field_validator("status")
     @classmethod
-    def _status(cls, v: str) -> str:
-        return _validate_status(v)
+    def _status(cls, v: str | None) -> str | None:
+        return _validate_status(v) if v is not None else v
 
 
 class ProgressItem(BaseModel):

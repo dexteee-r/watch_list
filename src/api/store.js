@@ -53,6 +53,11 @@ export function setStatus(tvmazeId, status) {
   return request(`/shows/${tvmazeId}`, { method: 'PATCH', body: JSON.stringify({ status }) })
 }
 
+// Mise à jour partielle (statut et/ou dates de visionnage). Une date à `null` l'efface.
+export function updateShow(tvmazeId, patch) {
+  return request(`/shows/${tvmazeId}`, { method: 'PATCH', body: JSON.stringify(patch) })
+}
+
 export function getProgress(tvmazeId) {
   return request(`/shows/${tvmazeId}/progress`)
 }

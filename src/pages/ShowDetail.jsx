@@ -10,6 +10,7 @@ import {
   getProgress,
   addShow,
   setStatus,
+  updateShow,
   markWatched,
   unmarkWatched,
   getRatings,
@@ -76,20 +77,26 @@ export default function ShowDetail() {
     if (watched) next.delete(key)
     else next.add(key)
     setWatchedSet(next)
-    // Lien épisodes → statut : cocher le dernier épisode passe la série en « Terminé »
-    // (le backend le fait aussi ; on le reflète à l'écran sans recharger).
-    if (!watched && next.size === episodes.length && localShow?.status !== 'completed') {
-      setLocalShow((prev) => ({ ...prev, status: 'completed' }))
-    }
+    // Re-sync statut + dates (le backend pose started_at au 1er épisode et passe
+    // en « Terminé » + finished_at quand tout est vu).
+    const fresh = await getShow(id)
+    if (fresh) setLocalShow(fresh)
   }
 
   async function handleStatusChange(status) {
     await setStatus(id, status)
-    setLocalShow((prev) => ({ ...prev, status }))
-    // Lien statut → épisodes : « Terminé » coche tous les épisodes (reflet du backend).
+    // « Terminé » coche tous les épisodes côté backend → on le reflète à l'écran.
     if (status === 'completed') {
       setWatchedSet(new Set(episodes.map((e) => `${e.season}-${e.number}`)))
     }
+    const fresh = await getShow(id)
+    if (fresh) setLocalShow(fresh)
+  }
+
+  async function handleDateChange(field, value) {
+    const iso = value ? `${value}T00:00:00Z` : null
+    await updateShow(id, { [field]: iso })
+    setLocalShow((prev) => ({ ...prev, [field]: iso }))
   }
 
   async function handleRate(season, rating) {
@@ -187,6 +194,29 @@ export default function ShowDetail() {
             )}
 
             <ProgressBar value={watchedSet.size} max={episodes.length} />
+
+            {tracked ? (
+              <div className="flex flex-wrap gap-x-6 gap-y-2 text-sm">
+                <label className="flex items-center gap-2 text-zinc-400">
+                  Commencé le
+                  <input
+                    type="date"
+                    value={localShow.started_at?.slice(0, 10) ?? ''}
+                    onChange={(e) => handleDateChange('started_at', e.target.value)}
+                    className="rounded-md border border-zinc-700 bg-zinc-900/80 px-2 py-1 text-zinc-200 outline-none transition [color-scheme:dark] focus:border-amber-400/60 focus:ring-2 focus:ring-amber-400/20"
+                  />
+                </label>
+                <label className="flex items-center gap-2 text-zinc-400">
+                  Terminé le
+                  <input
+                    type="date"
+                    value={localShow.finished_at?.slice(0, 10) ?? ''}
+                    onChange={(e) => handleDateChange('finished_at', e.target.value)}
+                    className="rounded-md border border-zinc-700 bg-zinc-900/80 px-2 py-1 text-zinc-200 outline-none transition [color-scheme:dark] focus:border-amber-400/60 focus:ring-2 focus:ring-amber-400/20"
+                  />
+                </label>
+              </div>
+            ) : null}
 
             {details.summary ? (
               <p className="max-w-prose text-sm leading-relaxed text-zinc-400">

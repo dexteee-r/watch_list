@@ -127,6 +127,10 @@ class UserShow(Base):
         BigInteger, ForeignKey("shows.id", ondelete="CASCADE"), nullable=False
     )
     status: Mapped[str] = mapped_column(Text, nullable=False, server_default="plan_to_watch")
+    # Dates de visionnage (auto-renseignées, modifiables) : début = 1er épisode coché,
+    # fin = passage en 'completed'. NULL tant que non atteint.
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     added_at: Mapped[datetime] = _created_at()
     updated_at: Mapped[datetime] = _updated_at()
 

@@ -11,9 +11,16 @@ from ..models import Episode, EpisodeWatch, Show, UserShow
 
 
 async def list_with_watched(db: AsyncSession, user_id: int) -> list[tuple]:
-    """(Show, status, added_at, watched_count) pour chaque série suivie. 2 requêtes, pas de N+1."""
+    """(Show, status, added_at, started_at, finished_at, watched_count) par série suivie.
+    2 requêtes, pas de N+1."""
     shows_stmt = (
-        select(Show, UserShow.status, UserShow.added_at)
+        select(
+            Show,
+            UserShow.status,
+            UserShow.added_at,
+            UserShow.started_at,
+            UserShow.finished_at,
+        )
         .join(UserShow, UserShow.show_id == Show.id)
         .where(UserShow.user_id == user_id)
         .order_by(UserShow.added_at.desc())
@@ -28,13 +35,22 @@ async def list_with_watched(db: AsyncSession, user_id: int) -> list[tuple]:
     )
     counts = dict((await db.execute(counts_stmt)).all())
 
-    return [(show, status, added_at, counts.get(show.id, 0)) for show, status, added_at in rows]
+    return [
+        (show, status, added_at, started_at, finished_at, counts.get(show.id, 0))
+        for show, status, added_at, started_at, finished_at in rows
+    ]
 
 
 async def get_by_tvmaze(db: AsyncSession, user_id: int, tvmaze_id: int):
-    """Row (Show, status, added_at) de la série suivie, ou None."""
+    """Row (Show, status, added_at, started_at, finished_at) de la série suivie, ou None."""
     stmt = (
-        select(Show, UserShow.status, UserShow.added_at)
+        select(
+            Show,
+            UserShow.status,
+            UserShow.added_at,
+            UserShow.started_at,
+            UserShow.finished_at,
+        )
         .join(UserShow, UserShow.show_id == Show.id)
         .where(UserShow.user_id == user_id, Show.tvmaze_id == tvmaze_id)
     )
