@@ -1,4 +1,6 @@
 """Routes d'administration des comptes. TOUTES protégées par `is_admin` (côté serveur)."""
+import logging
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -15,6 +17,7 @@ from ..schemas import (
 )
 from ..security import generate_password, hash_password
 
+logger = logging.getLogger("watchlist.security")
 router = APIRouter(prefix="/admin", tags=["admin"], dependencies=[Depends(require_admin)])
 
 
@@ -24,7 +27,11 @@ async def list_users(db: AsyncSession = Depends(get_db)) -> list[User]:
 
 
 @router.post("/users", response_model=UserCreatedOut, status_code=status.HTTP_201_CREATED)
-async def create_user(payload: UserCreate, db: AsyncSession = Depends(get_db)) -> UserCreatedOut:
+async def create_user(
+    payload: UserCreate,
+    admin: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+) -> UserCreatedOut:
     if await users_repo.get_by_email(db, payload.email):
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT, detail="Un compte avec cet email existe déjà."
@@ -36,6 +43,7 @@ async def create_user(payload: UserCreate, db: AsyncSession = Depends(get_db)) -
     )
     await db.commit()
     await db.refresh(user)
+    logger.info("Admin %s a créé le compte %s (admin=%s)", admin.email, user.email, user.is_admin)
     return UserCreatedOut(user=UserOut.model_validate(user), generated_password=password)
 
 
@@ -43,6 +51,7 @@ async def create_user(payload: UserCreate, db: AsyncSession = Depends(get_db)) -
 async def reset_password(
     user_id: int,
     payload: PasswordResetRequest = PasswordResetRequest(),
+    admin: User = Depends(require_admin),
     db: AsyncSession = Depends(get_db),
 ) -> PasswordResetOut:
     user = await users_repo.get_by_id(db, user_id)
@@ -52,6 +61,7 @@ async def reset_password(
     password = payload.password or generate_password()
     await users_repo.set_password(db, user, hash_password(password))
     await db.commit()
+    logger.info("Admin %s a réinitialisé le mot de passe de %s", admin.email, user.email)
     return PasswordResetOut(user_id=user.id, generated_password=password)
 
 
@@ -71,3 +81,4 @@ async def delete_user(
         )
     await users_repo.delete(db, user)
     await db.commit()
+    logger.info("Admin %s a supprimé le compte %s", admin.email, user.email)
