@@ -67,6 +67,48 @@ export async function getShowsPage(page = 0) {
   return shows.filter((s) => s.image?.medium && s.name)
 }
 
+// Cache (par session) du numéro de la dernière page d'index, pour ne sonder qu'une fois.
+let _lastPageCache = null
+
+/**
+ * Numéro de la dernière page valide de l'index TVmaze (recherche dichotomique).
+ * Les pages au-delà de la fin renvoient 404 → `getShowsPage` renvoie []. ~log2(n) requêtes.
+ */
+async function findLastPage() {
+  if (_lastPageCache !== null) return _lastPageCache
+  let lo = 0
+  let hi = 256
+  // Étend hi jusqu'à dépasser la fin (page vide).
+  while ((await getShowsPage(hi)).length > 0) {
+    lo = hi
+    hi *= 2
+    if (hi > 4096) break // garde-fou
+  }
+  // Dichotomie entre lo (valide) et hi (vide).
+  while (lo + 1 < hi) {
+    const mid = Math.floor((lo + hi) / 2)
+    if ((await getShowsPage(mid)).length > 0) lo = mid
+    else hi = mid
+  }
+  _lastPageCache = lo
+  return lo
+}
+
+/**
+ * Séries les plus récemment ajoutées au catalogue (= les plus récentes en pratique).
+ * TVmaze paginant par id croissant (anciennes d'abord) et n'ayant pas de tri par date,
+ * on charge les DERNIÈRES pages de l'index pour obtenir les nouveautés (2025-2026…).
+ * @param {number} pages combien de pages de fin charger
+ * @returns {Promise<Array>} séries récentes (avec image + nom)
+ */
+export async function getRecentShows(pages = 3) {
+  const last = await findLastPage()
+  const wanted = []
+  for (let p = last; p > last - pages && p >= 0; p--) wanted.push(p)
+  const results = await Promise.all(wanted.map((p) => getShowsPage(p)))
+  return results.flat()
+}
+
 /**
  * Derive the available filter options (facets) from a set of shows.
  * @param {Array} shows

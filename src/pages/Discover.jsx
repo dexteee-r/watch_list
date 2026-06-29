@@ -4,7 +4,7 @@ import { FunnelX, CircleNotch } from '@phosphor-icons/react'
 import SearchBar from '../components/SearchBar.jsx'
 import DiscoverCard from '../components/DiscoverCard.jsx'
 import { ShowCardSkeleton } from '../components/Skeleton.jsx'
-import { getShowsPage, extractFacets } from '../api/tvmaze.js'
+import { getShowsPage, getRecentShows, extractFacets } from '../api/tvmaze.js'
 import { getShows } from '../api/store.js'
 import { staggerContainer } from '../motion.js'
 
@@ -64,6 +64,9 @@ export default function Discover() {
   const [loadedPage, setLoadedPage] = useState(0)
   const [hasMore, setHasMore] = useState(true)
   const [loadingMore, setLoadingMore] = useState(false)
+  // Nouveautés (fin du catalogue TVmaze) chargées à la demande au tri « Plus récent ».
+  const [recentLoaded, setRecentLoaded] = useState(false)
+  const [loadingRecent, setLoadingRecent] = useState(false)
 
   // Filtres + tri.
   const [genre, setGenre] = useState('')
@@ -114,6 +117,26 @@ export default function Discover() {
     setLanguage('')
     setSort('popularity')
     setDisplayCount(DISPLAY_STEP)
+  }
+
+  // Tri : « Plus récent » charge d'abord les nouveautés depuis la fin du catalogue
+  // TVmaze (sinon on ne trie que les séries anciennes déjà chargées). Une seule fois.
+  async function handleSortChange(v) {
+    const next = v || 'popularity'
+    setSort(next)
+    setDisplayCount(DISPLAY_STEP)
+    if (next === 'year_desc' && !recentLoaded && !loadingRecent) {
+      setLoadingRecent(true)
+      try {
+        const recent = await getRecentShows()
+        setShows((prev) => mergeUnique(prev, recent))
+        setRecentLoaded(true)
+      } catch {
+        /* on garde le pool actuel */
+      } finally {
+        setLoadingRecent(false)
+      }
+    }
   }
 
   async function loadMore() {
@@ -232,10 +255,7 @@ export default function Discover() {
               label="Trier par"
               allLabel="Popularité"
               value={sort === 'popularity' ? '' : sort}
-              onChange={(v) => {
-                setSort(v || 'popularity')
-                setDisplayCount(DISPLAY_STEP)
-              }}
+              onChange={handleSortChange}
               options={Object.entries(SORTS)
                 .filter(([k]) => k !== 'popularity')
                 .map(([k, [lbl]]) => ({ value: k, label: lbl }))}
@@ -251,9 +271,18 @@ export default function Discover() {
             )}
           </div>
 
-          <p className="text-sm text-zinc-500">
-            {visible.length} série{visible.length > 1 ? 's' : ''}
-            {visible.length > displayCount ? ` (${displayCount} affichées)` : ''}
+          <p className="flex items-center gap-2 text-sm text-zinc-500">
+            {loadingRecent ? (
+              <>
+                <CircleNotch size={14} className="animate-spin text-amber-400" />
+                Chargement des séries récentes…
+              </>
+            ) : (
+              <>
+                {visible.length} série{visible.length > 1 ? 's' : ''}
+                {visible.length > displayCount ? ` (${displayCount} affichées)` : ''}
+              </>
+            )}
           </p>
 
           {visible.length === 0 ? (
