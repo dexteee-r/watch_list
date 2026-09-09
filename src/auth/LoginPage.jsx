@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { motion } from 'framer-motion'
-import { FilmSlate, CircleNotch } from '@phosphor-icons/react'
+import { FilmSlate, CircleNotch, Eye, EyeSlash } from '@phosphor-icons/react'
 import { useAuth } from './context.js'
 import { tap } from '../motion.js'
 
@@ -10,6 +10,7 @@ export default function LoginPage() {
   const [password, setPassword] = useState('')
   const [error, setError] = useState(null)
   const [submitting, setSubmitting] = useState(false)
+  const [showPassword, setShowPassword] = useState(false)
 
   async function handleSubmit(e) {
     e.preventDefault()
@@ -65,16 +66,26 @@ export default function LoginPage() {
             <label htmlFor="password" className="text-sm font-medium text-zinc-300">
               Mot de passe
             </label>
-            <input
-              id="password"
-              type="password"
-              autoComplete="current-password"
-              required
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className={field}
-              placeholder="••••••••"
-            />
+            <div className="relative">
+              <input
+                id="password"
+                type={showPassword ? 'text' : 'password'}
+                autoComplete="current-password"
+                required
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className={`${field} pr-10`}
+                placeholder="••••••••"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword((v) => !v)}
+                aria-label={showPassword ? 'Masquer le mot de passe' : 'Afficher le mot de passe'}
+                className="absolute inset-y-0 right-0 flex items-center px-3 text-zinc-500 transition hover:text-zinc-300"
+              >
+                {showPassword ? <EyeSlash size={18} /> : <Eye size={18} />}
+              </button>
+            </div>
           </div>
 
           {error ? (
