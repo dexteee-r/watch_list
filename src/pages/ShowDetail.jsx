@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { useParams, Link } from 'react-router-dom'
+import { useParams, useNavigate, useLocation } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { CaretLeft, Plus, CaretDown } from '@phosphor-icons/react'
 import EpisodeGrid from '../components/EpisodeGrid.jsx'
@@ -27,6 +27,15 @@ function stripHtml(html) {
 
 export default function ShowDetail() {
   const id = Number(useParams().id)
+  const navigate = useNavigate()
+  const location = useLocation()
+
+  // « default » = page ouverte directement (lien, rechargement) : pas d'historique
+  // dans l'appli, on retombe sur l'accueil.
+  function handleBack() {
+    if (location.key !== 'default') navigate(-1)
+    else navigate('/')
+  }
 
   const [details, setDetails] = useState(null)
   const [episodes, setEpisodes] = useState([])
@@ -83,6 +92,28 @@ export default function ShowDetail() {
     if (fresh) setLocalShow(fresh)
   }
 
+  // Coche (ou décoche) d'un coup tous les épisodes d'une saison. On n'envoie que
+  // les épisodes dont l'état change, un par un pour rester sous le rate-limit.
+  async function handleToggleSeason(season, eps, markAll) {
+    if (!tracked) return
+    const targets = eps.filter((e) => watchedSet.has(`${season}-${e.number}`) !== markAll)
+    if (targets.length === 0) return
+    const next = new Set(watchedSet)
+    try {
+      for (const ep of targets) {
+        if (markAll) await markWatched(id, season, ep.number)
+        else await unmarkWatched(id, season, ep.number)
+        const key = `${season}-${ep.number}`
+        if (markAll) next.add(key)
+        else next.delete(key)
+      }
+    } finally {
+      setWatchedSet(new Set(next))
+      const fresh = await getShow(id)
+      if (fresh) setLocalShow(fresh)
+    }
+  }
+
   async function handleStatusChange(status) {
     await setStatus(id, status)
     // « Terminé » coche tous les épisodes côté backend → on le reflète à l'écran.
@@ -123,12 +154,13 @@ export default function ShowDetail() {
 
   return (
     <article className="space-y-8">
-      <Link
-        to="/"
+      <button
+        type="button"
+        onClick={handleBack}
         className="inline-flex items-center gap-1 text-sm text-zinc-400 transition hover:text-zinc-100"
       >
         <CaretLeft size={16} weight="bold" /> Retour
-      </Link>
+      </button>
 
       {/* Cinematic hero */}
       <header className="relative overflow-hidden rounded-2xl border border-zinc-800">
@@ -237,6 +269,7 @@ export default function ShowDetail() {
         episodes={episodes}
         watchedSet={watchedSet}
         onToggle={handleToggle}
+        onToggleSeason={handleToggleSeason}
         disabled={!tracked}
         ratings={ratings}
         onRate={handleRate}

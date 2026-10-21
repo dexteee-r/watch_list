@@ -30,6 +30,7 @@ export default function EpisodeGrid({
   episodes,
   watchedSet,
   onToggle,
+  onToggleSeason,
   disabled = false,
   ratings = {},
   onRate,
@@ -60,6 +61,15 @@ export default function EpisodeGrid({
             <div className="mb-3 flex items-center justify-between gap-3 border-b border-zinc-800/80 pb-2">
               <h3 className="font-semibold text-zinc-200">Saison {season}</h3>
               <div className="flex items-center gap-3">
+                {!disabled && onToggleSeason && (
+                  <button
+                    type="button"
+                    onClick={() => onToggleSeason(season, eps, !allWatched)}
+                    className="rounded-md border border-zinc-700 bg-zinc-900/80 px-2.5 py-1 text-xs font-medium text-zinc-400 transition hover:border-amber-400/40 hover:text-amber-300"
+                  >
+                    {allWatched ? 'Tout décocher' : 'Tout cocher'}
+                  </button>
+                )}
                 {!disabled && onRate && (
                   <SeasonRating
                     value={ratings[season] ?? null}
