@@ -67,7 +67,7 @@ export default function EpisodeGrid({
                     onClick={() => onToggleSeason(season, eps, !allWatched)}
                     className="rounded-md border border-zinc-700 bg-zinc-900/80 px-2.5 py-1 text-xs font-medium text-zinc-400 transition hover:border-amber-400/40 hover:text-amber-300"
                   >
-                    {allWatched ? 'Tout décocher' : 'Tout cocher'}
+                    {allWatched ? 'Pas tout vu' : 'Tout vu'}
                   </button>
                 )}
                 {!disabled && onRate && (
