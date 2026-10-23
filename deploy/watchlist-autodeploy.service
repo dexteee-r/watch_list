@@ -1,0 +1,15 @@
+[Unit]
+Description=Watchlist automatic deployment (pull-based)
+After=network-online.target docker.service
+Wants=network-online.target
+Requires=docker.service
+
+[Service]
+Type=oneshot
+User=github
+Group=github
+ExecStart=/usr/local/bin/watchlist-autodeploy.sh
+# A first build can take a few minutes, never ten.
+TimeoutStartSec=10min
+NoNewPrivileges=yes
+PrivateTmp=yes

@@ -83,10 +83,18 @@ L'application est alors servie sur **http://localhost** (nginx). En production, 
 
 - **CI** (`.github/workflows/ci.yml`) — à chaque push / PR : lint + build du front,
   migrations + `pytest` du backend (avec un PostgreSQL de service).
-- **Déploiement** (`.github/workflows/deploy.yml`) — après un CI réussi sur `main` :
-  un **runner self-hosted** (label `watchlist`, installé dans le homelab) fait
-  `git reset --hard origin/main` puis `docker compose -f docker-compose.yml up -d --build`.
-  Aucun port entrant exposé (le runner se connecte en sortant vers GitHub).
+- **Déploiement** (`deploy/`) — **par tirage depuis le serveur**, pas par un runner :
+  un minuteur systemd (`watchlist-autodeploy.timer`, toutes les 3 min) lance
+  `deploy/watchlist-autodeploy.sh`, qui regarde si `main` a avancé. Un commit n'est
+  déployé que si sa **CI est verte** (API GitHub), puis le script fait
+  `git reset --hard origin/main` et `docker compose -f docker-compose.yml up -d --build`.
+  Le dépôt étant public, un runner self-hosted laisserait quiconque ouvre une pull
+  request depuis un fork exécuter du code sur le serveur : on l'évite. GitHub n'a
+  aucun accès au serveur et aucun port entrant n'est exposé.
+  Installation : copier `deploy/watchlist-autodeploy.sh` dans `/usr/local/bin/`
+  (exécutable) et les deux fichiers `deploy/watchlist-autodeploy.{service,timer}` dans
+  `/etc/systemd/system/`, puis `systemctl daemon-reload` et
+  `systemctl enable --now watchlist-autodeploy.timer`.
 
 ## Structure
 
