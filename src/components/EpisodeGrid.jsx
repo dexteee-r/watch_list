@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { motion } from 'framer-motion'
 import { tap } from '../motion.js'
 
@@ -47,6 +47,68 @@ export default function EpisodeGrid({
       .sort((a, b) => a[0] - b[0])
   }, [episodes])
 
+  // Glisser-cocher : maintenir le clic sur un épisode puis survoler les autres pour
+  // les cocher (ou décocher) d'un coup. L'état appliqué est l'inverse de celui de
+  // l'épisode de départ. La sélection = de l'épisode de départ à l'épisode survolé,
+  // dans la même saison, en ordre de lecture (robuste si la souris saute une case).
+  const [drag, setDrag] = useState(null)
+  const dragRef = useRef(null)
+  const suppressClick = useRef(false)
+
+  const updateDrag = useCallback((next) => {
+    dragRef.current = next
+    setDrag(next)
+  }, [])
+
+  useEffect(() => {
+    async function finishDrag() {
+      const d = dragRef.current
+      if (!d || d.committing) return
+      if (d.start === d.end) {
+        // Un seul épisode : c'est un simple clic, onClick s'en charge.
+        updateDrag(null)
+        return
+      }
+      // Le « click » qui suit le relâchement ne doit pas re-basculer l'épisode de
+      // départ. Il part juste après le mouseup, donc on réarme au tour suivant.
+      suppressClick.current = true
+      setTimeout(() => {
+        suppressClick.current = false
+      }, 0)
+      // On garde l'aperçu affiché jusqu'à la fin des requêtes (envoyées une par une).
+      updateDrag({ ...d, committing: true })
+      const lo = Math.min(d.start, d.end)
+      const hi = Math.max(d.start, d.end)
+      try {
+        await onToggleSeason(d.season, d.eps.slice(lo, hi + 1), d.target)
+      } catch {
+        // Le parent resynchronise l'affichage dans son `finally`.
+      } finally {
+        updateDrag(null)
+      }
+    }
+    function cancelDrag() {
+      if (dragRef.current && !dragRef.current.committing) updateDrag(null)
+    }
+    window.addEventListener('mouseup', finishDrag)
+    window.addEventListener('blur', cancelDrag)
+    return () => {
+      window.removeEventListener('mouseup', finishDrag)
+      window.removeEventListener('blur', cancelDrag)
+    }
+  }, [onToggleSeason, updateDrag])
+
+  function startDrag(e, season, eps, index, watched) {
+    if (e.button !== 0 || disabled || !onToggleSeason || dragRef.current?.committing) return
+    updateDrag({ season, eps, start: index, end: index, target: !watched, committing: false })
+  }
+
+  function extendDrag(season, index) {
+    const d = dragRef.current
+    if (!d || d.committing || d.season !== season || d.end === index) return
+    updateDrag({ ...d, end: index })
+  }
+
   if (episodes.length === 0) {
     return <p className="text-zinc-500">Aucun épisode trouvé.</p>
   }
@@ -83,23 +145,36 @@ export default function EpisodeGrid({
                 </span>
               </div>
             </div>
-            <div className="flex flex-wrap gap-2">
-              {eps.map((ep) => {
+            <div className="flex select-none flex-wrap gap-2">
+              {eps.map((ep, index) => {
                 const watched = watchedSet.has(`${season}-${ep.number}`)
+                // Aperçu du glisser-cocher : les cases de la sélection s'affichent
+                // déjà dans l'état qu'elles vont prendre.
+                const inDrag =
+                  drag !== null &&
+                  drag.season === season &&
+                  index >= Math.min(drag.start, drag.end) &&
+                  index <= Math.max(drag.start, drag.end)
+                const shown = inDrag ? drag.target : watched
                 return (
                   <motion.button
                     key={ep.id}
                     type="button"
                     disabled={disabled}
-                    onClick={() => onToggle(season, ep.number, watched)}
+                    onMouseDown={(e) => startDrag(e, season, eps, index, watched)}
+                    onMouseEnter={() => extendDrag(season, index)}
+                    onClick={() => {
+                      if (suppressClick.current) return
+                      onToggle(season, ep.number, watched)
+                    }}
                     whileTap={disabled ? undefined : tap}
                     title={`${ep.number}. ${ep.name ?? ''}`.trim()}
                     aria-pressed={watched}
                     className={`flex h-10 w-10 items-center justify-center rounded-lg text-sm font-medium tabular-nums transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
-                      watched
+                      shown
                         ? 'bg-amber-400 text-zinc-950 hover:bg-amber-300'
                         : 'bg-zinc-800/80 text-zinc-400 hover:bg-zinc-700 hover:text-zinc-200'
-                    }`}
+                    } ${inDrag ? 'ring-2 ring-amber-200/60' : ''}`}
                   >
                     {ep.number}
                   </motion.button>
